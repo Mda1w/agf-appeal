@@ -7,169 +7,301 @@ export async function getServerSideProps({ params }) {
     const res = await fetch(`${BOT_API}/api/appeal/record/${params.userId}`);
     const data = await res.json();
     if (!data.ok) return { props: { error: data.error, userId: params.userId } };
-    return { props: { record: data.record, appeal: data.appeal || null, questions: data.questions || [], guildName: data.guildName || "Anti Gang Force", guildIcon: data.guildIcon || null, userId: params.userId } };
-  } catch {
-    return { props: { error: "Could not connect to bot.", userId: params.userId } };
-  }
+    return { props: { record: data.record, appeal: data.appeal||null, questions: data.questions||[], guildName: data.guildName||"Anti Gang Force", guildIcon: data.guildIcon||null, userId: params.userId } };
+  } catch { return { props: { error: "Could not connect to bot.", userId: params.userId } }; }
 }
 
 export default function AppealPage({ record, appeal, questions, guildName, guildIcon, userId, error }) {
-  const [answers, setAnswers] = useState(questions.map(() => ""));
+  const [answers, setAnswers] = useState(questions.map(()=>""));
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState(null);
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErr(null);
-    if (answers.some(a => !a.trim())) return setErr("Please answer all questions.");
+    e.preventDefault(); setErr(null);
+    if (answers.some(a=>!a.trim())) return setErr("Please answer all questions.");
     setSubmitting(true);
     try {
-      const res = await fetch("/api/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: record?.userId || userId, answers }) });
+      const res = await fetch("/api/submit", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: record?.userId||userId, answers }) });
       const data = await res.json();
-      if (data.ok) setSubmitted(true);
-      else setErr(data.error || "Failed to submit.");
+      if (data.ok) setSubmitted(true); else setErr(data.error||"Failed to submit.");
     } catch { setErr("Network error. Try again."); }
     setSubmitting(false);
   };
 
-  const alreadyResolved = appeal && appeal.status !== "pending";
-  const alreadyPending = appeal && appeal.status === "pending";
-  const showForm = !error && record && !alreadyResolved && !alreadyPending && !submitted;
+  const resolved = appeal && appeal.status !== "pending";
+  const pending = appeal && appeal.status === "pending";
+  const showForm = !error && record && !resolved && !pending && !submitted;
+  const banned_date = record?.bannedAt ? new Date(record.bannedAt) : null;
 
   return (
     <>
       <Head>
         <title>Ban Appeal — {guildName}</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width,initial-scale=1"/>
+        <link rel="preconnect" href="https://fonts.googleapis.com"/>
+        <link href="https://fonts.googleapis.com/css2?family=gg+sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
         <style>{css}</style>
       </Head>
-      <div className="bg-blobs">
-        <div className="blob blob1" />
-        <div className="blob blob2" />
-      </div>
-      <div className="page">
-        <div className="container">
-          <div className="header">
-            {guildIcon
-              ? <img src={guildIcon} className="logo" alt="" />
-              : <div className="logo-fallback">⚖️</div>}
-            <h1>Ban Appeal</h1>
-            <p className="subtitle">{guildName} · Appeal Review System</p>
+
+      <div className="app">
+        {/* Sidebar */}
+        <div className="sidebar">
+          <div className="server-icon" title={guildName}>
+            {guildIcon ? <img src={guildIcon} alt="" className="server-img"/> : <span>⚖️</span>}
+          </div>
+          <div className="sidebar-divider"/>
+          <div className="sidebar-icon sidebar-icon--appeal active" title="Ban Appeal">⚖️</div>
+        </div>
+
+        {/* Channel list */}
+        <div className="channels">
+          <div className="channels-header">{guildName}</div>
+          <div className="channel-category">APPEAL SYSTEM</div>
+          <div className="channel-item active"><span className="ch-hash">#</span> ban-appeal</div>
+          <div className="channel-category">INFO</div>
+          <div className="channel-item"><span className="ch-hash">#</span> ban-details</div>
+          <div className="channel-item"><span className="ch-hash">#</span> proof</div>
+
+          {/* User card at bottom */}
+          <div className="user-card">
+            <div className="user-avatar">
+              {record?.userAvatar ? <img src={record.userAvatar} alt=""/> : <span>?</span>}
+              <div className={`user-status ${resolved&&appeal.status==="accepted"?"green":resolved?"red":"yellow"}`}/>
+            </div>
+            <div className="user-info">
+              <div className="user-name">{record?.userTag?.split("#")[0]||record?.username||"Unknown"}</div>
+              <div className="user-disc">{resolved?appeal.status==="accepted"?"Unbanned":"Denied":pending||submitted?"Under Review":"Banned"}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main chat area */}
+        <div className="chat">
+          <div className="chat-header">
+            <span className="chat-hash">#</span>
+            <span className="chat-title">ban-appeal</span>
+            <span className="chat-divider"/>
+            <span className="chat-desc">Submit your ban appeal for review by AGF Staff</span>
           </div>
 
-          {error && <Card><div className="empty"><div style={{fontSize:52,marginBottom:16}}>🚫</div><h2>{error}</h2><p>Make sure you are using the correct link from your ban DM.</p></div></Card>}
+          <div className="messages">
+            {/* System message */}
+            <div className="system-msg">
+              <div className="system-line"/>
+              <span>Ban Appeal System</span>
+              <div className="system-line"/>
+            </div>
 
-          {alreadyResolved && <Banner type={appeal.status} title={appeal.status==="accepted"?"✅ Appeal Accepted":"❌ Appeal Denied"} msg={appeal.status==="accepted"?"Your appeal was accepted and you have been unbanned. Welcome back.":`Your appeal was denied.${appeal.denyReason?" Reason: "+appeal.denyReason:""}`} />}
-          {(alreadyPending||submitted) && <Banner type="pending" title="⏳ Under Review" msg="Your appeal has been submitted. AGF staff will review it and DM you with the result." />}
+            {error && (
+              <div className="msg-block">
+                <div className="msg-avatar bot-avatar">🤖</div>
+                <div className="msg-content">
+                  <div className="msg-header"><span className="msg-author bot-name">AGF BOT</span><span className="msg-badge">APP</span><span className="msg-time">Today</span></div>
+                  <div className="msg-text">No ban record found for this user ID. Make sure you are using the correct link from your ban DM.</div>
+                </div>
+              </div>
+            )}
 
-          {record && (
-            <Card>
-              <Label>Your Ban</Label>
-              <div className="grid2">
-                <Info label="Username" value={record.userTag||record.username||userId} />
-                <Info label="Duration" value={record.duration||"Permanent"} red />
-                <Info label="Banned By" value={record.bannedBy||"Staff"} />
-                <Info label="Date" value={record.bannedAt?new Date(record.bannedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"Unknown"} />
-              </div>
-              <div className="reason-box">
-                <div className="reason-label">Reason</div>
-                <p>{record.reason||"No reason provided"}</p>
-              </div>
-              {record.proof&&record.proof.length>0&&(
-                <div style={{marginTop:16}}>
-                  <div className="proof-label">Proof ({record.proof.length})</div>
-                  <div className="proof-grid">
-                    {record.proof.map((url,i)=>(
-                      <a key={i} href={url} target="_blank" rel="noreferrer" className="proof-img-wrap">
-                        <img src={url} alt={`Proof ${i+1}`} className="proof-img" onError={e=>e.target.parentElement.style.display="none"} />
-                      </a>
-                    ))}
+            {record && (
+              <div className="msg-block">
+                <div className="msg-avatar bot-avatar">🤖</div>
+                <div className="msg-content">
+                  <div className="msg-header"><span className="msg-author bot-name">AGF BOT</span><span className="msg-badge">APP</span><span className="msg-time">{banned_date?.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</span></div>
+                  <div className="msg-text">Here is your ban information:</div>
+                  {/* Ban embed */}
+                  <div className="embed embed--red">
+                    <div className="embed-author">
+                      {guildIcon&&<img src={guildIcon} className="embed-author-icon" alt=""/>}
+                      <span>{guildName}</span>
+                    </div>
+                    <div className="embed-title">You were banned</div>
+                    <div className="embed-fields">
+                      <div className="embed-field embed-field--inline">
+                        <div className="embed-field-name">User</div>
+                        <div className="embed-field-value">{record.userTag}</div>
+                      </div>
+                      <div className="embed-field embed-field--inline">
+                        <div className="embed-field-name">Duration</div>
+                        <div className="embed-field-value" style={{color:"#f87171"}}>{record.duration||"Permanent"}</div>
+                      </div>
+                      <div className="embed-field embed-field--inline">
+                        <div className="embed-field-name">Banned By</div>
+                        <div className="embed-field-value">{record.bannedBy||"Staff"}</div>
+                      </div>
+                      <div className="embed-field">
+                        <div className="embed-field-name">Reason</div>
+                        <div className="embed-field-value">{record.reason||"No reason provided"}</div>
+                      </div>
+                    </div>
+                    {record.proof&&record.proof.length>0&&(
+                      <div className="embed-field" style={{marginTop:8}}>
+                        <div className="embed-field-name">Proof ({record.proof.length})</div>
+                        <div className="proof-row">
+                          {record.proof.map((url,i)=>(
+                            <a key={i} href={url} target="_blank" rel="noreferrer" className="proof-thumb">
+                              <img src={url} alt={`Proof ${i+1}`} onError={e=>e.target.parentElement.style.display="none"}/>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="embed-footer">{banned_date?.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</div>
                   </div>
                 </div>
-              )}
-            </Card>
-          )}
+              </div>
+            )}
 
-          {showForm && (
-            <Card>
-              <Label>Appeal Form</Label>
-              <p className="form-hint">Answer every question honestly. Incomplete or dishonest appeals will be denied.</p>
-              <form onSubmit={handleSubmit}>
-                {questions.map((q,i)=>(
-                  <div key={i} className="field">
-                    <label><span className="q-num">{String(i+1).padStart(2,"0")}</span> {q}</label>
-                    <textarea value={answers[i]} onChange={e=>{const a=[...answers];a[i]=e.target.value;setAnswers(a);}} placeholder="Your answer..." required rows={3} className="textarea" />
+            {(resolved||pending||submitted)&&(
+              <div className="msg-block">
+                <div className="msg-avatar bot-avatar">🤖</div>
+                <div className="msg-content">
+                  <div className="msg-header"><span className="msg-author bot-name">AGF BOT</span><span className="msg-badge">APP</span><span className="msg-time">Today</span></div>
+                  <div className={`embed embed--${resolved?(appeal.status==="accepted"?"green":"red"):"yellow"}`}>
+                    <div className="embed-title">
+                      {resolved?(appeal.status==="accepted"?"✅ Appeal Accepted":"❌ Appeal Denied"):"⏳ Appeal Under Review"}
+                    </div>
+                    <div className="embed-desc">
+                      {resolved
+                        ?(appeal.status==="accepted"
+                          ?"Your appeal was accepted. You have been unbanned. Welcome back to Anti Gang Force."
+                          :`Your appeal was denied.${appeal.denyReason?" **Reason:** "+appeal.denyReason:""}`)
+                        :"Your appeal has been submitted and is currently under review by AGF Staff. You will be notified via DM."}
+                    </div>
                   </div>
-                ))}
-                {err && <div className="err-box">{err}</div>}
-                <button type="submit" disabled={submitting} className="submit-btn">
-                  {submitting ? <><span className="spinner" /> Submitting...</> : "Submit Appeal →"}
-                </button>
-              </form>
-            </Card>
-          )}
+                </div>
+              </div>
+            )}
 
-          <div className="footer">Anti Gang Force · Ban Appeal System</div>
+            {showForm&&(
+              <div className="msg-block">
+                <div className="msg-avatar bot-avatar">🤖</div>
+                <div className="msg-content">
+                  <div className="msg-header"><span className="msg-author bot-name">AGF BOT</span><span className="msg-badge">APP</span><span className="msg-time">Today</span></div>
+                  <div className="msg-text">Please fill out the appeal form below. Answer all questions honestly. Incomplete or dishonest appeals will be denied.</div>
+                  <div className="embed embed--blue">
+                    <div className="embed-title">📋 Ban Appeal Form</div>
+                    <form onSubmit={handleSubmit} className="appeal-form">
+                      {questions.map((q,i)=>(
+                        <div key={i} className="form-field">
+                          <label className="form-label"><span className="q-index">{i+1}</span>{q}</label>
+                          <textarea className="form-textarea" value={answers[i]} onChange={e=>{const a=[...answers];a[i]=e.target.value;setAnswers(a);}} placeholder="Type your answer..." required rows={3}
+                            onFocus={e=>e.target.classList.add("focused")} onBlur={e=>e.target.classList.remove("focused")}
+                          />
+                        </div>
+                      ))}
+                      {err&&<div className="form-error">{err}</div>}
+                      <button type="submit" disabled={submitting} className="form-submit">
+                        {submitting?<><span className="spinner"/>Submitting...</>:"Submit Appeal"}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{height:80}}/>
+          </div>
         </div>
       </div>
     </>
   );
 }
 
-function Card({children}){return <div className="card">{children}</div>;}
-function Label({children}){return <div className="section-label">{children}</div>;}
-function Info({label,value,red}){return(<div><div className="info-label">{label}</div><div className="info-value" style={red?{color:"#f87171"}:{}}>{value}</div></div>);}
-function Banner({type,title,msg}){const c={accepted:"#22c55e",denied:"#ef4444",pending:"#f59e0b"};const color=c[type]||c.pending;return(<div className="banner" style={{borderLeftColor:color,background:`rgba(${type==="accepted"?"34,197,94":type==="denied"?"239,68,68":"245,158,11"},.06)`,borderColor:`rgba(${type==="accepted"?"34,197,94":type==="denied"?"239,68,68":"245,158,11"},.2)`}}><div className="banner-title" style={{color}}>{title}</div><p className="banner-msg">{msg}</p></div>);}
-
 const css = `
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:#0a0c12;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
-::selection{background:rgba(88,101,242,.35)}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#0a0c12}::-webkit-scrollbar-thumb{background:#1e2030;border-radius:3px}
-.bg-blobs{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
-.blob{position:absolute;border-radius:50%;filter:blur(60px)}
-.blob1{top:-20%;left:-15%;width:600px;height:600px;background:radial-gradient(circle,rgba(88,101,242,.15),transparent 70%)}
-.blob2{bottom:-10%;right:-10%;width:500px;height:500px;background:radial-gradient(circle,rgba(239,68,68,.1),transparent 70%)}
-.page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:52px 16px 80px}
-.container{width:100%;max-width:660px}
-.header{text-align:center;margin-bottom:40px}
-.logo{width:76px;height:76px;border-radius:50%;border:3px solid rgba(88,101,242,.5);display:block;margin:0 auto 16px;box-shadow:0 0 32px rgba(88,101,242,.2)}
-.logo-fallback{width:76px;height:76px;border-radius:50%;background:linear-gradient(135deg,#5865f2,#4752c4);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 0 32px rgba(88,101,242,.3)}
-h1{font-size:30px;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:6px}
-.subtitle{color:#475569;font-size:14px}
-.card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:24px;margin-bottom:16px;backdrop-filter:blur(8px);animation:fadeUp .4s ease both}
-.section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#475569;margin-bottom:16px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-.info-label{font-size:11px;color:#334155;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-.info-value{font-size:14px;color:#f1f5f9;font-weight:600}
-.reason-box{background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.15);border-left:3px solid #ef4444;border-radius:10px;padding:14px 16px}
-.reason-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#ef4444;margin-bottom:6px}
-.reason-box p{font-size:14px;color:#cbd5e1;line-height:1.6}
-.proof-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#475569;margin-bottom:10px}
-.proof-grid{display:flex;flex-wrap:wrap;gap:8px}
-.proof-img-wrap{display:block;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08);transition:transform .2s,box-shadow .2s;flex-shrink:0}
-.proof-img-wrap:hover{transform:scale(1.04);box-shadow:0 8px 24px rgba(0,0,0,.4)}
-.proof-img{width:130px;height:86px;object-fit:cover;display:block}
-.banner{border:1px solid;border-left:3px solid;border-radius:12px;padding:16px 20px;margin-bottom:16px;animation:fadeUp .4s ease both}
-.banner-title{font-weight:700;font-size:15px;margin-bottom:5px}
-.banner-msg{font-size:13px;color:#94a3b8;line-height:1.6}
-.form-hint{font-size:13px;color:#475569;margin-bottom:24px;line-height:1.7}
-.field{margin-bottom:20px}
-.field label{display:block;font-size:13px;font-weight:600;color:#c9d8f0;margin-bottom:8px;line-height:1.5}
-.q-num{color:#5865f2;font-size:11px;margin-right:6px;font-weight:700;font-family:monospace}
-.textarea{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;color:#e2e8f0;font-size:13px;font-family:inherit;resize:vertical;transition:border-color .2s,box-shadow .2s;line-height:1.6}
-.textarea:focus{outline:none;border-color:#5865f2;box-shadow:0 0 0 3px rgba(88,101,242,.12)}
-.err-box{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#f87171}
-.submit-btn{width:100%;background:linear-gradient(135deg,#5865f2,#4752c4);border:none;border-radius:12px;padding:14px;color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;transition:transform .15s,box-shadow .15s,opacity .2s;display:flex;align-items:center;justify-content:center;gap:8px}
-.submit-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 28px rgba(88,101,242,.35)}
-.submit-btn:disabled{opacity:.5;cursor:not-allowed}
-.spinner{width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
-.empty{text-align:center;padding:32px 0;color:#475569}
-.empty h2{color:#94a3b8;font-size:20px;margin-bottom:8px}
-.empty p{font-size:13px;line-height:1.6}
-.footer{text-align:center;margin-top:32px;color:#1e293b;font-size:12px}
-@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+html,body{background:#313338;color:#dcddde;font-family:'gg sans','Noto Sans',Whitney,'Helvetica Neue',Helvetica,Arial,sans-serif;height:100%;overflow:hidden}
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* Sidebar */
+.sidebar{width:72px;background:#1e1f22;display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:8px;flex-shrink:0;overflow-y:auto}
+.server-icon{width:48px;height:48px;border-radius:50%;background:#5865f2;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;transition:border-radius .15s;overflow:hidden;flex-shrink:0}
+.server-icon:hover{border-radius:16px}
+.server-img{width:100%;height:100%;object-fit:cover}
+.sidebar-divider{width:32px;height:2px;background:#3f4147;border-radius:1px;flex-shrink:0}
+.sidebar-icon{width:48px;height:48px;border-radius:50%;background:#313338;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;transition:border-radius .15s,background .15s}
+.sidebar-icon:hover,.sidebar-icon.active{border-radius:16px;background:#5865f2}
+
+/* Channel list */
+.channels{width:240px;background:#2b2d31;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.channels-header{padding:16px;font-weight:700;font-size:15px;color:#f2f3f5;border-bottom:1px solid #1e1f22;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.channel-category{padding:16px 8px 4px 16px;font-size:11px;font-weight:700;text-transform:uppercase;color:#949ba4;letter-spacing:.02em}
+.channel-item{display:flex;align-items:center;gap:6px;padding:2px 8px;margin:0 8px;border-radius:4px;font-size:15px;color:#949ba4;cursor:pointer;transition:background .1s,color .1s}
+.channel-item:hover,.channel-item.active{background:rgba(255,255,255,.07);color:#dcddde}
+.channel-item.active{background:rgba(255,255,255,.1);color:#f2f3f5}
+.ch-hash{font-size:20px;color:#5c5f66;flex-shrink:0}
+.user-card{margin-top:auto;background:#232428;padding:8px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.user-avatar{position:relative;flex-shrink:0}
+.user-avatar img,.user-avatar span{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;background:#5865f2;object-fit:cover}
+.user-status{position:absolute;bottom:-2px;right:-2px;width:10px;height:10px;border-radius:50%;border:2px solid #232428}
+.user-status.green{background:#23a55a}
+.user-status.red{background:#f23f42}
+.user-status.yellow{background:#f0b232}
+.user-info{min-width:0}
+.user-name{font-size:13px;font-weight:600;color:#f2f3f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-disc{font-size:11px;color:#949ba4}
+
+/* Chat */
+.chat{flex:1;display:flex;flex-direction:column;background:#313338;overflow:hidden}
+.chat-header{height:48px;background:#313338;border-bottom:1px solid rgba(0,0,0,.2);display:flex;align-items:center;padding:0 16px;gap:8px;flex-shrink:0;box-shadow:0 1px 0 rgba(0,0,0,.2)}
+.chat-hash{font-size:22px;color:#72767d;flex-shrink:0}
+.chat-title{font-weight:700;font-size:15px;color:#f2f3f5}
+.chat-divider{width:1px;height:22px;background:#3f4147;margin:0 6px}
+.chat-desc{font-size:13px;color:#949ba4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.messages{flex:1;overflow-y:auto;padding:16px 0;display:flex;flex-direction:column;gap:0}
+.messages::-webkit-scrollbar{width:6px}
+.messages::-webkit-scrollbar-track{background:#2f3136}
+.messages::-webkit-scrollbar-thumb{background:#202225;border-radius:3px}
+.system-msg{display:flex;align-items:center;gap:12px;padding:8px 16px;margin:8px 0}
+.system-line{flex:1;height:1px;background:#3f4147}
+.system-msg span{font-size:12px;color:#6d6f78;white-space:nowrap;font-weight:500}
+.msg-block{display:flex;gap:16px;padding:2px 16px;margin-bottom:0}
+.msg-block:hover{background:rgba(0,0,0,.07)}
+.msg-avatar{width:40px;height:40px;border-radius:50%;flex-shrink:0;margin-top:4px;display:flex;align-items:center;justify-content:center;font-size:20px}
+.bot-avatar{background:#5865f2;border-radius:50%}
+.msg-content{flex:1;min-width:0}
+.msg-header{display:flex;align-items:baseline;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+.msg-author{font-size:15px;font-weight:600;color:#f2f3f5;cursor:pointer}
+.msg-author:hover{text-decoration:underline}
+.bot-name{color:#7289da}
+.msg-badge{background:#5865f2;color:#fff;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;text-transform:uppercase;letter-spacing:.5px}
+.msg-time{font-size:11px;color:#72767d}
+.msg-text{font-size:15px;color:#dcddde;line-height:1.5;word-break:break-word}
+
+/* Embeds */
+.embed{border-left:4px solid #5865f2;background:#2b2d31;border-radius:0 4px 4px 0;padding:12px 16px;margin-top:4px;max-width:520px}
+.embed--red{border-left-color:#f23f42}
+.embed--green{border-left-color:#23a55a}
+.embed--yellow{border-left-color:#f0b232}
+.embed--blue{border-left-color:#5865f2}
+.embed-author{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;font-weight:600;color:#dcddde}
+.embed-author-icon{width:18px;height:18px;border-radius:50%}
+.embed-title{font-size:15px;font-weight:700;color:#f2f3f5;margin-bottom:8px}
+.embed-desc{font-size:14px;color:#dcddde;line-height:1.5;margin-bottom:8px}
+.embed-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.embed-field{grid-column:1/-1}
+.embed-field--inline{grid-column:span 1}
+.embed-field-name{font-size:12px;font-weight:700;color:#dcddde;margin-bottom:2px;text-transform:capitalize}
+.embed-field-value{font-size:14px;color:#b5bac1}
+.embed-footer{font-size:11px;color:#72767d;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.05)}
+.proof-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.proof-thumb{display:block;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,.06)}
+.proof-thumb img{width:100px;height:66px;object-fit:cover;display:block;transition:opacity .15s}
+.proof-thumb:hover img{opacity:.85}
+
+/* Form */
+.appeal-form{margin-top:4px}
+.form-field{margin-bottom:16px}
+.form-label{display:block;font-size:13px;font-weight:600;color:#b5bac1;margin-bottom:6px;line-height:1.4}
+.q-index{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;background:#5865f2;border-radius:50%;font-size:10px;font-weight:700;color:#fff;margin-right:7px;flex-shrink:0}
+.form-textarea{width:100%;background:#1e1f22;border:1px solid #1e1f22;border-radius:3px;padding:10px;color:#dcddde;font-size:14px;font-family:inherit;resize:vertical;line-height:1.5;transition:border-color .1s}
+.form-textarea.focused,.form-textarea:focus{outline:none;border-color:#5865f2}
+.form-error{background:rgba(242,63,66,.1);border:1px solid rgba(242,63,66,.3);border-radius:4px;padding:8px 12px;font-size:13px;color:#f87171;margin-bottom:12px}
+.form-submit{background:#5865f2;border:none;border-radius:3px;padding:8px 16px;color:#fff;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s}
+.form-submit:hover:not(:disabled){background:#4752c4}
+.form-submit:disabled{opacity:.5;cursor:not-allowed}
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:500px){.grid2{grid-template-columns:1fr}.proof-img{width:110px;height:74px}}
+@media(max-width:600px){.channels{display:none}.chat-desc{display:none}.embed-fields{grid-template-columns:1fr 1fr}.embed-field--inline{grid-column:span 1}}
+@media(max-width:400px){.sidebar{display:none}}
 `;
