@@ -45,13 +45,16 @@ export default function AppealPage({ record, appeal, questions, guildName, guild
     if (!check2) return setErr("You must acknowledge the second statement.");
     setSubmitting(true);
     try {
-      // Upload images as base64
-      const imageData = await Promise.all(imagePreviews.map(async (p, i) => {
-        const res = await fetch("/api/upload-image", { method: "POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ data: p, name: images[i]?.name || `image_${i}.jpg` }) });
-        const d = await res.json();
-        return d.url || null;
-      }));
-      const res = await fetch("/api/submit", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: record?.userId||userId, answers, questions, images: imageData.filter(Boolean) }) });
+      // Upload images to blob, only send actual URLs (skip failures)
+      const imageData = [];
+      for (let i = 0; i < imagePreviews.length; i++) {
+        try {
+          const r = await fetch("/api/upload-image", { method: "POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ data: imagePreviews[i], name: images[i]?.name || `image_${i}.jpg` }) });
+          const d = await r.json();
+          if (d.ok && d.url && d.url.startsWith("http")) imageData.push(d.url);
+        } catch {} // skip failed uploads
+      }
+      const res = await fetch("/api/submit", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: record?.userId||userId, answers, questions, images: imageData }) });
       const data = await res.json();
       if (data.ok) setSubmitted(true); else setErr(data.error||"Submission failed. Try again.");
     } catch { setErr("Network error. Please try again."); }
