@@ -1,4 +1,5 @@
 {
+  "framework": "nextjs",
   "env": {
     "BOT_API": "http://46.62.230.81:5015"
   },
